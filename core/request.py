@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-10 17:16:40
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-11 16:44:43
+# @Last Modified time: 2018-07-12 22:30:12
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 
 
@@ -23,6 +23,9 @@ class POIRequest(object):
         self.need_proxy = need_proxy
         self.fail_time = fail_time
         self.timeout = timeout
+        self.proxies = None
+        self.headers = None
+        self.cookies = None
 
     def args2str(self):
         """

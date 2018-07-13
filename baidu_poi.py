@@ -3,9 +3,9 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-10 19:28:40
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-11 19:48:43
+# @Last Modified time: 2018-07-13 22:38:01
 # @E-mail: QuintinHsu@gmail.com
-# @Description: 
+# @Description: 抓取百度POI，百度POI每次请求最多返回50条数据，page_num从0开始，需要设置城市边界，不要设置城市代码，否则在边界区域会搜索不到数据
 
 import time
 import json
@@ -15,6 +15,8 @@ import logging.config
 import cloghandler
 import threading
 import requests
+import requests.utils
+import copy
 
 from core.db import RedisQueue, POIMySQL
 from core.request import POIRequest
@@ -42,7 +44,7 @@ class Spider(threading.Thread):
             if poi_request.callback == None:
                 poi_request.callback = self.parse_json
             callback = poi_request.callback
-            poi_response = self.request(poi_request)
+            poi_response, poi_request = self.request(poi_request)
 
             if poi_response and poi_response.status_code in VALID_STATUSES:
                 results = callback(poi_response, poi_request)
@@ -62,7 +64,7 @@ class Spider(threading.Thread):
         :param poi_request: 请求
         :return: 响应
         """
-        time.sleep(SLEEP_TIME)
+        time.sleep(SLEEP_TIME_BD)
 
         proxy = None
         headers = {
@@ -73,22 +75,57 @@ class Spider(threading.Thread):
             'Accept': u'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
         }       
         try:
-            # 随机获取 proxy 和 ua
-            if poi_request.need_proxy:                
-                proxy = random.choice(PROXIES)
+            global fake_user
+            # 加锁
+            if lock.acquire():
+                fake_user['counter'] += 1
 
-            headers['User-Agent'] = random.choice(USER_AGENT)
+                # 总的请求大于40W次时，更新fake_user池
+                if fake_user['counter'] > 4000000:
+                    fake_user = util.get_fake_user(IP_FILE, UA_FILE)
+
+                fu = random.choice(fake_user['fu'])
+
+                # cookies的请求达到最大次数时，更换cookies,并设置使用次数为0
+                if fu['counter'] > MAX_COOKIES_TIME:  
+                    fu['cookies'] = None
+                    fu['counter'] = 0
+
+                headers['User-Agent'] = fu['ua']
+                proxy = copy.deepcopy(fu['proxy'])
+                cookies = fu['cookies']
+                fu['counter'] += 1
+
+                poi_request.headers = headers
+                poi_request.cookies = cookies
+                poi_request.proxy = proxy
+
+                # 当cookies为None时，从response中获取cookies，并更新fake_user中的cookies
+                if not fu['cookies']:
+                    response = requests.get(url=poi_request.url, params=poi_request.params, 
+                        headers=headers, cookies=cookies, timeout=poi_request.timeout, allow_redirects=False, proxies=proxy)
+                    # 随机城市，并添加至cookies中
+                    fu['cookies'] = requests.utils.add_dict_to_cookiejar(response.cookies, {'MCITY':'-%s%%3A' % random.randint(100, 360)})
+
+                    # 释放锁
+                    lock.release()
+                    return response, poi_request
+                else:
+                    # 释放锁
+                    lock.release()            
 
             response = requests.get(url=poi_request.url, params=poi_request.params, 
-                headers=headers, timeout=poi_request.timeout, allow_redirects=False, proxies=proxy)
+                headers=headers, cookies=cookies, timeout=poi_request.timeout, allow_redirects=False, proxies=proxy)
 
-            return response
+            return response, poi_request
         except Exception as e:
-            logger.error('Request Failed\nparams:%s\nua:%s\nproxy:%s' % (poi_request.params, headers['User-Agent'], proxy), 
+            # 释放锁
+            lock.release()
+            logger.error('请求失败，\nparams:%s\nua:%s\nproxy:%s' % (poi_request.params, headers['User-Agent'], proxy), 
                 exc_info=True)
             # 将该请求重新加入任务队列
             self.error(poi_request)
-            return False
+            return False, poi_request
 
     def parse_json(self, response, poi_request):
         """
@@ -114,6 +151,7 @@ class Spider(threading.Thread):
                     poi_total = int(response_json['result']['total'])
 
                     if poi_total > 0 and poi_total <= 50: #只有1页数据，直接将该POI数据返回
+                        logger.info('返回第一页的POI数据（只有一页数据）, wd:%s, bound:%s, nn:%s, total:%s' % (params['wd'], params['b'], params['nn'], poi_total))
                         yield response_json['content']
 
                     elif poi_total > 50 and poi_total < 760: #有多页数据
@@ -121,28 +159,28 @@ class Spider(threading.Thread):
                         remain_poi_num = poi_total - params['nn'] 
 
                         if remain_poi_num > 0 and remain_poi_num <= 50: # 本次请求返回的数据是最后一页数据，直接将该POI数据返回
+                            logger.info('返回最后一页的POI数据, wd:%s, bound:%s, nn:%s, total:%s' % (params['wd'], params['b'], params['nn'], poi_total))
                             yield response_json['content']
                         elif remain_poi_num > 50: # 构造下一页数据的请求，并将该请求加入的任务队列
-                            logger.info('请求下一页数据, wd:%s, bound:%s, nn:%s, total:%s, remain: %s' % (params['wd'], params['b'], params['nn'] + 50, poi_total, remain_poi_num))
-                            params = self.__construct_params(params['wd'], params['b'], params['nn'] + 50)
-                            poi_request = POIRequest(url=poi_request.url, params=params, callback=self.parse_json, 
+                            logger.info('返回最后一页的POI数据，请求下一页数据, wd:%s, bound:%s, nn:%s, total:%s, remain: %s' % (params['wd'], params['b'], params['nn'], poi_total, remain_poi_num))
+                            next_page_params = self.__construct_params(params['wd'], params['b'], params['nn'] + 50)
+                            poi_request = POIRequest(url=poi_request.url, params=next_page_params, callback=self.parse_json, 
                                 need_proxy=poi_request.need_proxy)
                             yield (poi_request, response_json['content']) # 返回构造的请求和本次请求返回的POI数据
 
                     else: # 百度在某个区域最多只能搜索到760个POI，如果poi_total=760，则对该区域进行分割，并构造每个子区域的请求
-                        params = poi_request.params
-                        logger.info('对bound进行分割，wd:%s, bound:%s, nn:%s, total:%s' % (params['wd'], params['b'], params['nn'] + 50, poi_total))
+                        logger.info('对bound进行分割，wd:%s, bound:%s, nn:%s, total:%s' % (params['wd'], params['b'], params['nn'], poi_total))
                         sub_area_bounds = self.__calc_subarea(params['b'])
                         for sub_area_bound in sub_area_bounds:
-                            params = self.__construct_params(params['wd'], sub_area_bound, 0)
-                            poi_request = POIRequest(url=poi_request.url, params=params, callback=self.parse_json, 
+                            sub_params = self.__construct_params(params['wd'], sub_area_bound, 0)
+                            poi_request = POIRequest(url=poi_request.url, params=sub_params, callback=self.parse_json, 
                                 need_proxy=poi_request.need_proxy)
                             yield poi_request
             else:
-                logger.error('Unknow response: %s\nparams:%s' % (response.text, poi_request.params))
+                logger.error('Unknow response: %s\nparams:%s\nproxies:%s\nheaders:%s\ncookies:%s' % (response.text, poi_request.params, poi_request.proxies, poi_request.headers, poi_request.cookies))
                 self.error(poi_request)
         except Exception as e:
-            logger.error('Unknow response: %s\nparams:%s' % (response.text, poi_request.params), exc_info=True)
+            logger.error('Unknow response: %s\nparams:%s\nproxies:%s\nheaders:%s\ncookies:%s' % (response.text, poi_request.params, poi_request.proxies, poi_request.headers, poi_request.cookies), exc_info=True)
             self.error(poi_request)
 
     def save_poi(self, data):
@@ -152,10 +190,8 @@ class Spider(threading.Thread):
         """
         reconstruct_data = list()
         for d in data:
-            if d['uid'] and d['uid'] != 'null':
-                content = str(d)
-                content = content.replace("'", "\\\'")
-                content = content.replace('"', "\\\"")
+            if 'uid' in d and d['uid'] and d['uid'] != 'null':
+                content = json.dumps(d)
                 reconstruct_data.append([d['uid'], content, int(util.localtime())])
         self.db.insert_many('bd_poi', reconstruct_data)
 
@@ -258,7 +294,7 @@ class Spider(threading.Thread):
 
     def error(self, poi_request):
         """
-        错误处理，发生错误时，若该请求的失败次数小鱼一定的阈值，则将请求重新加入任务队列
+        错误处理，发生错误时，若该请求的失败次数小于一定的阈值，则将请求重新加入任务队列
         :param poi_request: 请求
 
         """
@@ -272,6 +308,8 @@ class Spider(threading.Thread):
 def init_queue(init_bound, redis_key=REDIS_KEY_POIREQUEST_BD):
     """
     初始化任务队列，注意，若该任务队列存在，则会先清空该任务队列
+    :param init_bound:      城市边界
+    :param redis_key:       redis key
     """
     request_queue = RedisQueue()
     request_queue.clear(redis_key=redis_key)
@@ -352,7 +390,10 @@ def schedule(thread_num=THREAD_NUM):
     for t in threads:
         t.join()
 
+lock = threading.Lock()
 if __name__ == '__main__':
+
+    fake_user = util.get_fake_user(IP_FILE, UA_FILE)
 
     # 初始化搜索区域
     init_bound = '(12834000.0,4720000.0;13091000.0,5006000.0)'
