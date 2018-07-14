@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-12 08:57:12
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-13 22:35:40
+# @Last Modified time: 2018-07-14 17:22:58
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 抓取高德POI，高德POI每次请求最多返回30条数据，page_num从1开始，需要设置城市代码和城市边界
 
@@ -22,8 +22,6 @@ from core.request import POIRequest
 from core import util
 
 from config.config import *
-from config.proxy import *
-from config.user_agent import *
 
 logging.config.fileConfig('./config/logging_amap.conf')
 logger = logging.getLogger(__name__)
@@ -92,7 +90,7 @@ class Spider(threading.Thread):
 
                 poi_request.headers = headers
                 poi_request.cookies = cookies
-                poi_request.proxy = proxy
+                poi_request.proxies = proxy
                 
                 lock.release()            
 
@@ -321,6 +319,6 @@ if __name__ == '__main__':
     init_bound = '115.281974|39.172454|117.590798|41.142945'
     init_city = 110000
     # 注意，若该任务队列存在，本操作会先清空该任务队列
-    # init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD)
+    init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD)
 
     schedule(thread_num=THREAD_NUM)

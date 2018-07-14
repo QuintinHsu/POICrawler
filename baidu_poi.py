@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-10 19:28:40
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-13 22:38:01
+# @Last Modified time: 2018-07-14 17:20:59
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 抓取百度POI，百度POI每次请求最多返回50条数据，page_num从0开始，需要设置城市边界，不要设置城市代码，否则在边界区域会搜索不到数据
 
@@ -23,8 +23,6 @@ from core.request import POIRequest
 from core import util
 
 from config.config import *
-from config.proxy import *
-from config.user_agent import *
 
 logging.config.fileConfig('./config/logging_baidu.conf')
 logger = logging.getLogger(__name__)
@@ -98,7 +96,7 @@ class Spider(threading.Thread):
 
                 poi_request.headers = headers
                 poi_request.cookies = cookies
-                poi_request.proxy = proxy
+                poi_request.proxies = proxy
 
                 # 当cookies为None时，从response中获取cookies，并更新fake_user中的cookies
                 if not fu['cookies']:
@@ -144,7 +142,7 @@ class Spider(threading.Thread):
             if response_json and 'result' in response_json:
                 data_security = response_json['result']['data_security_filt_res']                        
                 if data_security > 0 and poi_request.fail_time < MAX_FAILED_TIME: # 当data_security > 0时，说明百度对结果进行数据筛选，不是完整的结果,将当前请求重新加入任务队列，若连续MAX_FAILED_TIME都是不完整数据，则将该不完整数据存入数据库
-                    logger.error('数据不完整，当前请求重新加入任务队列, data_security_filt_res=%s' % data_security)
+                    logger.error('数据不完整，当前请求重新加入任务队列, data_security_filt_res=%s\nparams:%s\nproxies:%s\nheaders:%s\ncookies:%s' % (data_security, poi_request.params, poi_request.proxies, poi_request.headers, poi_request.cookies))
                     self.error(poi_request) # 
 
                 elif 'content' in response_json: # 结果中有content，说明有POI数据，否者说明该区域没有POI数据
