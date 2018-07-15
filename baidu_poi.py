@@ -190,7 +190,7 @@ class Spider(threading.Thread):
         for d in data:
             if 'uid' in d and d['uid'] and d['uid'] != 'null':
                 content = json.dumps(d)
-                reconstruct_data.append([d['uid'], content, int(util.localtime())])
+                reconstruct_data.append([d['uid'], content, int(time.time())])
         self.db.insert_many('bd_poi', reconstruct_data)
 
 
@@ -398,4 +398,4 @@ if __name__ == '__main__':
     # 注意，若该任务队列存在，本操作会先清空该任务队列
     init_queue(init_bound, redis_key=REDIS_KEY_POIREQUEST_BD)
 
-    schedule(thread_num=THREAD_NUM)
+#    schedule(thread_num=THREAD_NUM)

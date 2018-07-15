@@ -57,7 +57,7 @@ def get_fake_user(ip_file, ua_file):
         for i in range(80):
             if i % 10 == 0:
                 ua = random.choice(uas)
-            fu = {'proxy': {'http': 'http://%s:61000' % ip}, 'ua': ua, 'cookies': None, 'counter': 0}
+            fu = {'proxy': {'http': 'http://%s' % ip}, 'ua': ua, 'cookies': None, 'counter': 0}
             fake_user['fu'].append(fu)
     return fake_user
 

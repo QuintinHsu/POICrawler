@@ -163,7 +163,7 @@ class Spider(threading.Thread):
         for d in data:
             if 'id'in d and d['id'] and d['id'] != 'null':
                 content = json.dumps(d)
-                reconstruct_data.append([d['id'], content, int(util.localtime())])
+                reconstruct_data.append([d['id'], content, int(time.time())])
         self.db.insert_many('gd_poi', reconstruct_data)
 
 
