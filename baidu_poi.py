@@ -63,6 +63,8 @@ class Spider(threading.Thread):
         :return: 响应
         """
         time.sleep(SLEEP_TIME_BD)
+        
+        is_locked = False
 
         proxy = None
         headers = {
@@ -76,10 +78,11 @@ class Spider(threading.Thread):
             global fake_user
             # 加锁
             if lock.acquire():
+                is_locked = True
                 fake_user['counter'] += 1
 
-                # 总的请求大于40W次时，更新fake_user池
-                if fake_user['counter'] > 4000000:
+                # 总的请求大于4W次时，更新fake_user池
+                if fake_user['counter'] > 40000:
                     fake_user = util.get_fake_user(IP_FILE, UA_FILE)
 
                 fu = random.choice(fake_user['fu'])
@@ -107,10 +110,12 @@ class Spider(threading.Thread):
 
                     # 释放锁
                     lock.release()
+                    is_locked = False
                     return response, poi_request
                 else:
                     # 释放锁
-                    lock.release()            
+                    lock.release()
+                    is_locked = False            
 
             response = requests.get(url=poi_request.url, params=poi_request.params, 
                 headers=headers, cookies=cookies, timeout=poi_request.timeout, allow_redirects=False, proxies=proxy)
@@ -118,7 +123,8 @@ class Spider(threading.Thread):
             return response, poi_request
         except Exception as e:
             # 释放锁
-            lock.release()
+            if is_locked:
+                lock.release()
             logger.error('请求失败，\nparams:%s\nua:%s\nproxy:%s' % (poi_request.params, headers['User-Agent'], proxy), 
                 exc_info=True)
             # 将该请求重新加入任务队列
@@ -396,6 +402,6 @@ if __name__ == '__main__':
     # 初始化搜索区域
     init_bound = '(12834000.0,4720000.0;13091000.0,5006000.0)'
     # 注意，若该任务队列存在，本操作会先清空该任务队列
-    init_queue(init_bound, redis_key=REDIS_KEY_POIREQUEST_BD)
+    # init_queue(init_bound, redis_key=REDIS_KEY_POIREQUEST_BD)
 
     schedule(thread_num=THREAD_NUM)

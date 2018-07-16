@@ -77,8 +77,8 @@ class Spider(threading.Thread):
             if lock.acquire():
                 fake_user['counter'] += 1
 
-                # 总的请求大于40W次时，更新fake_user池
-                if fake_user['counter'] > 4000000:
+                # 总的请求大于4W次时，更新fake_user池
+                if fake_user['counter'] > 40000:
                     fake_user = util.get_fake_user(IP_FILE, UA_FILE)
 
                 fu = random.choice(fake_user['fu'])
@@ -319,6 +319,6 @@ if __name__ == '__main__':
     init_bound = '115.281974|39.172454|117.590798|41.142945'
     init_city = 110000
     # 注意，若该任务队列存在，本操作会先清空该任务队列
-    init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD)
+    #init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD)
 
     schedule(thread_num=THREAD_NUM)
