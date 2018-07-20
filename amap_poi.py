@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-12 08:57:12
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-14 17:22:58
+# @Last Modified time: 2018-07-20 09:28:27
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 抓取高德POI，高德POI每次请求最多返回30条数据，page_num从1开始，需要设置城市代码和城市边界
 
@@ -95,7 +95,7 @@ class Spider(threading.Thread):
                 lock.release()            
 
             response = requests.get(url=poi_request.url, params=poi_request.params, 
-                headers=headers, cookies=cookies, timeout=poi_request.timeout, allow_redirects=False, proxies=proxy)
+                headers=headers, cookies=cookies, timeout=poi_request.timeout, allow_redirects=True, proxies=proxy)
 
             return response, poi_request
         except Exception as e:
@@ -125,7 +125,16 @@ class Spider(threading.Thread):
                     page_size = int(response_json['searchOpt']['pageSize'])
                     poi_total = int(response_json['data']['total'])
 
-                    if poi_total > 200: #在某个区域搜索POI大于200个，则对该区域进行分割，并构造每个子区域的请求                            
+                    bound = params['geoobj']
+
+                    area_bound = list(map(float, bound.split("|")))
+
+                    # 左下角地理坐标
+                    lb = area_bound[0:2]
+                    # 右上角地理坐标
+                    rt = area_bound[2:4]
+
+                    if poi_total > 200 and rt[0] - lb[0] > 0.0001 and rt[1] - lb[1] > 0.0001: #在某个区域搜索POI大于200个,或者区域长宽约大于10米，则对该区域进行分割，并构造每个子区域的请求                            
                         logger.info('对bound进行分割，keywords:%s, bound:%s, page_num:%s, total:%s' % (params['keywords'], params['geoobj'], params['pagenum'], poi_total))
                         sub_area_bounds = self.__calc_subarea(params['geoobj'])
                         for sub_area_bound in sub_area_bounds:
@@ -257,7 +266,7 @@ def init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD):
     """
     request_queue = RedisQueue()
     request_queue.clear(redis_key=redis_key)
-    url = 'https://ditu.amap.com/service/poiInfo'
+    url = 'http://ditu.amap.com/service/poiInfo'
 
     baidu_poi_wd = list()
     with open('./data/classification_poi', 'r') as f:
@@ -319,6 +328,6 @@ if __name__ == '__main__':
     init_bound = '115.281974|39.172454|117.590798|41.142945'
     init_city = 110000
     # 注意，若该任务队列存在，本操作会先清空该任务队列
-    #init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD)
+    init_queue(init_city, init_bound, redis_key=REDIS_KEY_POIREQUEST_GD)
 
     schedule(thread_num=THREAD_NUM)

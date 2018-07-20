@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-11 19:04:11
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-15 21:59:52
+# @Last Modified time: 2018-07-17 10:30:22
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 
 import os
@@ -56,7 +56,7 @@ def get_fake_user(ip_file, ua_file):
     for ip in ips:
         for i in range(5):
             ua = random.choice(uas)
-            fu = {'proxy': {'https': 'https://%s' % ip, 'http': 'http://%s' % ip}, 'ua': ua, 'cookies': None, 'counter': 0}
+            fu = {'proxy': {'https': 'http://%s' % ip, 'http': 'http://%s' % ip}, 'ua': ua, 'cookies': None, 'counter': 0}
             fake_user['fu'].append(fu)
     return fake_user
 

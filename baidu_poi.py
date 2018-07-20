@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-10 19:28:40
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-15 21:56:39
+# @Last Modified time: 2018-07-19 10:04:32
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 抓取百度POI，百度POI每次请求最多返回50条数据，page_num从0开始，需要设置城市边界，不要设置城市代码，否则在边界区域会搜索不到数据
 
