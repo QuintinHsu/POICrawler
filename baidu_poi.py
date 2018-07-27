@@ -3,7 +3,7 @@
 # @Author: Quintin Xu
 # @Date:   2018-07-10 19:28:40
 # @Last Modified by:   Quintin Xu
-# @Last Modified time: 2018-07-20 11:30:05
+# @Last Modified time: 2018-07-21 09:04:40
 # @E-mail: QuintinHsu@gmail.com
 # @Description: 抓取百度POI，百度POI每次请求最多返回50条数据，page_num从0开始，需要设置城市边界，不要设置城市代码，否则在边界区域会搜索不到数据
 
@@ -172,7 +172,7 @@ class Spider(threading.Thread):
                                 need_proxy=poi_request.need_proxy)
                             yield (poi_request, response_json['content']) # 返回构造的请求和本次请求返回的POI数据
 
-                    else: # 百度在某个区域最多只能搜索到760个POI，如果poi_total=760，则对该区域进行分割，并构造每个子区域的请求
+                    elif poi_total >= 760: # 百度在某个区域最多只能搜索到760个POI，如果poi_total=760，则对该区域进行分割，并构造每个子区域的请求
                         logger.info('对bound进行分割，wd:%s, bound:%s, nn:%s, total:%s' % (params['wd'], params['b'], params['nn'], poi_total))
                         sub_area_bounds = self.__calc_subarea(params['b'])
                         for sub_area_bound in sub_area_bounds:
